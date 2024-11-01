@@ -11,21 +11,27 @@ Iona Moynihan
 > Fixed the materials, particularly the plants within the vivarium, which required materials to be double sided and have an opacity mask.
 > Placed the vivarium together within the project- had to use the Skeletal Mesh for Shoelace the snake (in order to do animation).
 > Created a new Sequencer to allow for the animation process.
-> ANIMATING SHOELACE THE SNAKE USING SEQUENCER(concepts learnt in class for animation): had to use Timing to get the snake in the correct orientation at the right time- did so by manipulating it's transform. Used Pose-To-Pose animation- with each keyframe manipulating between different poses a bone can do. Staging; snake is within a vivarium environment.
+> ANIMATING SHOELACE THE SNAKE USING SEQUENCER(concepts learnt in class for animation): had to use Timing to get the snake in the correct orientation at the right time- did so by manipulating it's transform. Used Pose-To-Pose animation- with each keyframe manipulating between different poses a bone can do. Staging; snake is within a vivarium environment, appeal, personality (cute beady eyes, cartoony model).
 
 Kumi Gilchrist
 -
+> Researched appropriate workflow for exporting/importing models from Blender.
+> Created animation story board.
+> Researched animation concepts for the team to use.
 > Set up the Unreal Project and manually hand-placed and imported the background for our animation.
-> Fixed any background object materials issues.
-> TBC!!!!!
+> Fixed any background object materials issues (such as replacing glass materials in Unreal Engine (for the window and vivarium)).
+> Rebuilt initial scene architecture (walls, windows, floor) in Unreal.
+> Put together power point presentation for explanation video.
+> Produced the explanation video.
 
 Owen Hayes
 -
 > Rigged guitar strings in Blender for same reasons as Iona above, in particularly, rigged the lower string segments to allow for animation. SEE BELOW FOR 'RIGGING PROCESS'.
 > Imported the guitar in FBX form into the project, had to fix it's material as it's face normals were facing the wrong way- inverted them in Blender before re-importing.
 > Set up a Camera for Unreal Engine.
-> Added background images (so the landscape is no longer a desert but a comfy, nighttime scene), and gave the scene/level some lighting.
-> Animated his guitar using keyframe animation and used the following animation concepts learnt in class: Timing (by flying the camera to capture the guitar's animation), pose-to-pose (bending of the strings), and staging (the guitar is next to a bed).
+> Added background images, room ceiling (so the landscape is no longer a desert but a comfy, nighttime scene), and gave the scene/level some lighting.
+> Animated his guitar using keyframe animation and used the following animation concepts learnt in class: Timing (by flying the camera to capture the guitar's animation), pose-to-pose (bending of the strings), and staging (the guitar is next to a bed), appeal.
+> Animated the mushroom lamp using the following animation concepts: squash and stretch (squish of the lamp turning on), anticipation (waiting for the lamp to turn on to create a light effect), staging (room environment), exaggeration (lamp in reality is made of much harder plastic), appeal, personality (has a cute face and is bouncy).
 > Created the camera's flythrough animation.
 
 
