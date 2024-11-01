@@ -12,6 +12,7 @@ Iona Moynihan
 > Placed the vivarium together within the project- had to use the Skeletal Mesh for Shoelace the snake (in order to do animation).
 > Created a new Sequencer to allow for the animation process.
 > ANIMATING SHOELACE THE SNAKE USING SEQUENCER(concepts learnt in class for animation): had to use Timing to get the snake in the correct orientation at the right time- did so by manipulating it's transform. Used Pose-To-Pose animation- with each keyframe manipulating between different poses a bone can do. Staging; snake is within a vivarium environment, appeal, personality (cute beady eyes, cartoony model).
+> Fixed Owen's guitar model and rigged it using Blender (created armature, added bones, weight painted it to match vertex weighting).
 
 Kumi Gilchrist
 -
@@ -30,7 +31,7 @@ Owen Hayes
 > Imported the guitar in FBX form into the project, had to fix it's material as it's face normals were facing the wrong way- inverted them in Blender before re-importing.
 > Set up a Camera for Unreal Engine.
 > Added background images, room ceiling (so the landscape is no longer a desert but a comfy, nighttime scene), and gave the scene/level some lighting.
-> Animated his guitar using keyframe animation and used the following animation concepts learnt in class: Timing (by flying the camera to capture the guitar's animation), pose-to-pose (bending of the strings), and staging (the guitar is next to a bed), appeal.
+> Animated his guitar using keyframe animation and used the following animation concepts learnt in class: Timing (by flying the camera to capture the guitar's animation), straight-ahead (bending of the strings), and staging (the guitar is next to a bed), appeal, follow-through (guitar jolting when strings are plucked).
 > Animated the mushroom lamp using the following animation concepts: squash and stretch (squish of the lamp turning on), anticipation (waiting for the lamp to turn on to create a light effect), staging (room environment), exaggeration (lamp in reality is made of much harder plastic), appeal, personality (has a cute face and is bouncy).
 > Created the camera's flythrough animation.
 
