@@ -2,7 +2,7 @@ DELIVERABLE 2 - Unreal Engine Animation
 ---
 BY: Group 1 (Iona Moynihan, Kumi Gilchrist, Owen Hayes)
 
-Due to limitations with file sizing, we couldn't upload the actual video file for our animation to GitHub, instead the video can be found at this youtube link: https://youtu.be/784XXkwtMD0
+The video can also be found at this youtube link: https://youtu.be/784XXkwtMD0
 
 Likewise, our Deliverable 2 explanation video can be found in this MS Stream link: https://heriotwatt.sharepoint.com/:v:/s/3DGraphicsSquad/Eb2nkU27ViVEsjUpi4SPSxYBSvRtxRnoSEotP8i0yX5WnA?e=VJmQjf&nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJTdHJlYW1XZWJBcHAiLCJyZWZlcnJhbFZpZXciOiJTaGFyZURpYWxvZy1MaW5rIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXcifX0%3D
 
