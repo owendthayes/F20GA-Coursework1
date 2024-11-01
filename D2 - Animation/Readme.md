@@ -24,7 +24,9 @@ Owen Hayes
 > Rigged guitar strings in Blender for same reasons as Iona above, in particularly, rigged the lower string segments to allow for animation. SEE BELOW FOR 'RIGGING PROCESS'.
 > Imported the guitar in FBX form into the project, had to fix it's material as it's face normals were facing the wrong way- inverted them in Blender before re-importing.
 > Set up a Camera for Unreal Engine.
-> TBC!!!!!
+> Added background images (so the landscape is no longer a desert but a comfy, nighttime scene), and gave the scene/level some lighting.
+> Animated his guitar using keyframe animation and used the following animation concepts learnt in class: Timing (by flying the camera to capture the guitar's animation), pose-to-pose (bending of the strings), and staging (the guitar is next to a bed).
+> Created the camera's flythrough animation.
 
 
 RIGGING PROCESS:
