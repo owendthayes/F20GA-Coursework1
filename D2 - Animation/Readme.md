@@ -2,6 +2,8 @@ DELIVERABLE 2 - Unreal Engine Animation
 ---
 BY: Group 1 (Iona Moynihan, Kumi Gilchrist, Owen Hayes)
 
+Due to limitations with file sizing, we couldn't upload the actual video file to github, instead the video can be found at this youtube link: https://youtu.be/784XXkwtMD0
+
 --------------------------
 Iona Moynihan
 -
@@ -43,4 +45,3 @@ RIGGING PROCESS:
 4. manually weight painted the areas of the mesh per vertex group (bone).
 5. exported the rigged model.
 
-The video of the animation can be found under the name "StudentRoom.avi" in the repo, alternatively the video can be found at this youtube link: https://youtu.be/784XXkwtMD0
