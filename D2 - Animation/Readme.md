@@ -17,7 +17,7 @@ Iona Moynihan
 > Created a new Sequencer to allow for the animation process.
 > ANIMATING SHOELACE THE SNAKE USING SEQUENCER(concepts learnt in class for animation): had to use Timing to get the snake in the correct orientation at the right time- did so by manipulating it's transform. Used Pose-To-Pose animation- with each keyframe manipulating between different poses a bone can do. Staging; snake is within a vivarium environment, appeal, personality (cute beady eyes, cartoony model).
 > Fixed Owen's guitar model and rigged it using Blender (created armature, added bones, weight painted it to match vertex weighting).
-> Reduced final Unreal Project file to submittable size by migrating the scene to a new file, deleting all unused assets, and manually rescaling 2K textures to 1K. 
+> Reduced final Unreal Project file to submittable size by migrating the scene to a new file, deleting all unused assets, and manually rescaling 2K textures to 1K in Photoshop. 
 
 Kumi Gilchrist
 -
