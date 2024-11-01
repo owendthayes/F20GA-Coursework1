@@ -11,7 +11,7 @@ Iona Moynihan
 > Fixed the materials, particularly the plants within the vivarium, which required materials to be double sided and have an opacity mask.
 > Placed the vivarium together within the project- had to use the Skeletal Mesh for Shoelace the snake (in order to do animation).
 > Created a new Sequencer to allow for the animation process.
-> ANIMATING SHOELACE THE SNAKE USING SEQUENCER(concepts learnt in class for animation): had to use Timing to get the snake in the correct orientation at the right time- did so by manipulating it's transform. Used Pose-To-Pose animation- with each keyframe manipulating between different poses a bone can do.
+> ANIMATING SHOELACE THE SNAKE USING SEQUENCER(concepts learnt in class for animation): had to use Timing to get the snake in the correct orientation at the right time- did so by manipulating it's transform. Used Pose-To-Pose animation- with each keyframe manipulating between different poses a bone can do. Staging; snake is within a vivarium environment.
 
 Kumi Gilchrist
 -
