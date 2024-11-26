@@ -1,0 +1,161 @@
+<!doctype html>
+
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>2024-2025 F2XGA: Example 03 - Load shaders from text and full screen resize</title>
+        <script src="libraries/jquery-3.7.1.min.js"></script>
+</head>
+
+<style>
+    html, body {
+      margin: 0;       /* remove the default margin          */
+      height: 100%;    /* make the html,body fill the page   */
+    }
+    canvas {
+      display: block;  /* make the canvas act like a block   */
+      width: 100%;     /* make the canvas fill its container */
+      height: 100%;
+    }
+</style>
+ 
+<body>
+    <canvas></canvas>
+
+    <script type="module">
+        // Note: type module is needed for top-level awaits (e.g. awaits outside of async functions)
+ 
+        // Variables
+        let then = Date.now();
+        let now = 0;
+        let shaderFile; // load shader text using ajax (jquery)
+        $.ajax({
+            type: "GET",
+             url: "shaders/03_simple.wgsl",
+            async: false,
+            success: function(response) { shaderFile = response; }
+        });
+
+        // Graphics are quite difficult to debug (blank screen) - so adding debugging messages.
+        console.log("Starting WebGPU code (" + Date().toLocaleString() + ").");
+ 
+        async function main() {
+
+            console.log("Checking for support, hardware and adapter.");
+            if (!navigator.gpu) {
+                throw new Error("WebGPU not supported by your browser.");
+            }
+
+            const adapter = await navigator.gpu.requestAdapter();
+            if (!adapter){
+                throw new Error("WebGPU Supported but not appropriate hardware.");
+            }
+
+            const device = await adapter.requestDevice();
+            if (!device) {
+                throw new Error("Error supporting WebGPU in your browser");
+            }
+
+            console.log("Getting the WebGPU context from our canvas element and configuring it.");
+            const canvas = document.querySelector('canvas');
+            const context = canvas.getContext('webgpu');
+            const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+            context.configure({
+                device,
+                format: canvasFormat,
+            });
+
+            
+            const module = device.createShaderModule({
+                label: 'Simple Shader',
+                code: shaderFile,
+            });
+
+
+            const pipeline = device.createRenderPipeline({
+                label: 'Hardcoded pipeline',
+                layout: 'auto',
+                vertex: {
+                    //entryPoint: 'vs',
+                    module,
+                },
+                fragment: {
+                    //entryPoint: 'vs',
+                    module,
+                targets: [{ format: canvasFormat }],
+                },
+            });
+
+
+            const renderPassDescriptor = {
+                label: 'Basic canvas render pass',
+                colorAttachments: [
+                {
+                    // view: <- to be filled out when we render
+                    clearValue: [1.0, 0.75, 0.60, 1.0],
+                    loadOp: 'clear',  // clear or store (draw on top)
+                    storeOp: 'store', // store or clear (throw away - e.g. multisampling)
+                },
+                ],
+            };
+
+
+            function render() {
+                // Calculate FPS
+                now = Date.now();
+                const deltaTime = now - then;
+                let fps = (1000.0 / (deltaTime));
+                then = now;
+                console.log("Rendering frame (" + Date().toLocaleString() + ") at " + fps.toFixed(2) +" FPS.");
+
+                // Get the current texture from the canvas context and set it as the texture to render.
+                renderPassDescriptor.colorAttachments[0].view =
+                    context.getCurrentTexture().createView();
+
+                // Create a command encoder to start encoding commands
+                const encoder = device.createCommandEncoder({ label: 'the encoder' });
+
+                // Create a render pass encoder to encode render commands
+                const pass = encoder.beginRenderPass(renderPassDescriptor);
+                pass.setPipeline(pipeline);
+                pass.draw(6);  
+                pass.end();
+
+                const commandBuffer = encoder.finish();
+                
+                device.queue.submit([commandBuffer]);
+
+                // Option 2 loop: 
+                //requestAnimationFrame(render);  
+            }
+
+            // Render just one time, if not using options below
+            //render();
+
+            // Option 1 loop: define FPS
+            const UPDATE_INTERVAL = 1000.0 /30.0; 
+            setInterval(render, UPDATE_INTERVAL);
+    
+            // Option 2 loop: match display rate
+            //requestAnimationFrame(render);   
+
+            // Check for resize
+            const observer = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                const canvas = entry.target;
+                const width = entry.contentBoxSize[0].inlineSize;
+                const height = entry.contentBoxSize[0].blockSize;
+                canvas.width = Math.max(1, Math.min(width, device.limits.maxTextureDimension2D));
+                canvas.height = Math.max(1, Math.min(height, device.limits.maxTextureDimension2D));
+            }
+            });
+            observer.observe(canvas);
+
+        } 
+
+        main();
+
+    </script>
+
+</body>
+</html>
