@@ -1,0 +1,149 @@
+<!doctype html>
+
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>2024-2025 F2XGA: Example 02 - Add FPS and a full render loop</title>
+</head>
+
+<body>
+    <canvas width="512" height="512"></canvas>
+
+    <script type="module">
+        // Note: type module is needed for top-level awaits (e.g. awaits outside of async functions)
+ 
+        // Variables
+        let then = Date.now();
+        let now = 0;
+
+        // Graphics are quite difficult to debug (blank screen) - so adding debugging messages.
+        console.log("Starting WebGPU code (" + Date().toLocaleString() + ").");
+ 
+        async function main() {
+
+            console.log("Checking for support, hardware and adapter.");
+            if (!navigator.gpu) {
+                throw new Error("WebGPU not supported by your browser.");
+            }
+
+            const adapter = await navigator.gpu.requestAdapter();
+            if (!adapter){
+                throw new Error("WebGPU Supported but not appropriate hardware.");
+            }
+
+            const device = await adapter.requestDevice();
+            if (!device) {
+                throw new Error("Error supporting WebGPU in your browser");
+            }
+
+            console.log("Getting the WebGPU context from our canvas element and configuring it.");
+            const canvas = document.querySelector('canvas');
+            const context = canvas.getContext('webgpu');
+            const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+            context.configure({
+                device,
+                format: canvasFormat,
+            });
+
+            
+            const module = device.createShaderModule({
+            label: 'Simple Shader',
+            code: `
+                @vertex fn vs(
+                @builtin(vertex_index) vertexIndex : u32
+                ) -> @builtin(position) vec4f {
+                    let pos = array(
+                        vec2f(-0.5,  0.5),  // top left
+                        vec2f(-0.5, -0.5),  // bottom left
+                        vec2f( 0.5, -0.5),   // bottom right
+
+                        vec2f( 0.5, -0.5),   // bottom right
+                        vec2f( 0.5,  0.5),  // top right
+                        vec2f(-0.5,  0.5)  // top left
+                    );
+            
+                    return vec4f(pos[vertexIndex], 0.0, 1.0);
+                }
+            
+                @fragment fn fs() -> @location(0) vec4f {
+                    return vec4f(0.0, 0.0, 0.7, 1.0);
+                }
+                `
+            });
+
+
+            const pipeline = device.createRenderPipeline({
+                label: 'Hardcoded pipeline',
+                layout: 'auto',
+                vertex: {
+                    //entryPoint: 'vs',
+                    module,
+                },
+                fragment: {
+                    //entryPoint: 'vs',
+                    module,
+                targets: [{ format: canvasFormat }],
+                },
+            });
+
+
+            const renderPassDescriptor = {
+                label: 'Basic canvas render pass',
+                colorAttachments: [
+                {
+                    // view: <- to be filled out when we render
+                    clearValue: [1.0, 0.75, 0.60, 1.0],
+                    loadOp: 'clear',  // clear or store (draw on top)
+                    storeOp: 'store', // store or clear (throw away - e.g. multisampling)
+                },
+                ],
+            };
+
+
+            function render() {
+                // Calculate FPS
+                now = Date.now();
+                const deltaTime = now - then;
+                let fps = (1000.0 / (deltaTime));
+                then = now;
+                console.log("Rendering frame (" + Date().toLocaleString() + ") at " + fps.toFixed(2) +" FPS.");
+
+                // Get the current texture from the canvas context and set it as the texture to render.
+                renderPassDescriptor.colorAttachments[0].view =
+                    context.getCurrentTexture().createView();
+
+                // Create a command encoder to start encoding commands
+                const encoder = device.createCommandEncoder({ label: 'the encoder' });
+
+                // Create a render pass encoder to encode render commands
+                const pass = encoder.beginRenderPass(renderPassDescriptor);
+                pass.setPipeline(pipeline);
+                pass.draw(6);  
+                pass.end();
+
+                const commandBuffer = encoder.finish();
+                
+                device.queue.submit([commandBuffer]);
+
+                // Option 2 loop: 
+                //requestAnimationFrame(render);  
+            }
+
+            // Render just one time, if not using options below
+            //render();
+
+            // Option 1 loop: define FPS
+            const UPDATE_INTERVAL = 1000.0 /30.0; 
+            setInterval(render, UPDATE_INTERVAL);
+    
+            // Option 2 loop: match display rate
+            requestAnimationFrame(render);   
+
+        } 
+
+        main();
+
+    </script>
+
+</body>
+</html>

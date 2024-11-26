@@ -1,0 +1,358 @@
+<!doctype html>
+
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>2024-2025 F2XGA: Example 01 - Hello WebGPU</title>
+        <script src="libraries/jquery-3.7.1.min.js"></script>
+        <script src="https://wgpu-matrix.org/dist/3.x/wgpu-matrix.js"></script>
+</head>
+
+<style>
+    html, body {
+      margin: 0;       /* remove the default margin          */
+      height: 100%;    /* make the html,body fill the page   */
+    }
+    canvas {
+      display: block;  /* make the canvas act like a block   */
+      width: 100%;     /* make the canvas fill its container */
+      height: 100%;
+    }
+</style>
+
+<body>
+    <canvas id="canvasElement"></canvas>
+
+    <script type="module">
+        // Variables
+        let adapter;
+        let device;
+        let canvas;
+        let context;
+        let canvasFormat;
+        let vsShaderFile;
+        let fsShaderFile;
+        let vsModule;
+        let fsModule;
+        let vertexBuffer;  // VBO
+        let colorBuffer;  
+        let indexBuffer; 
+        let pipeline;
+        let renderPassDescriptor;
+        let then = Date.now();
+        let now = 0;
+        //define the object stuff up here
+        let indices;
+        let positions;
+        let colorData;
+
+        //from example 8
+        let bindGroupLayout;    // new
+        let pipelineLayout;     // new
+        let bindGroup;          // new
+        let uniformBuffer0;     // new
+        let uniformBuffer1;     // new
+        let modelMatrixRot;     // new
+        let angle = 45.0;       // new   
+        //from example 9
+        let canvasWidth;        //new
+        let canvasHeight;       //new
+        let projectionMatrix;       // new  
+        let canvasElement;                 // new
+        
+        const { vec2, vec3, mat4 } = wgpuMatrix; //used to define elements from wgpu-matrix library
+
+        // Note: type module is needed for top-level awaits (e.g. awaits outside of async functions)
+ 
+        // Graphics are quite difficult to debug (blank screen) - so adding debugging messages.
+        console.log("Starting WebGPU code (" + Date().toLocaleString() + ").");
+
+        //import loader
+        import Loader from './Loader.js';
+ 
+        async function main() {
+
+            async function setup(){
+                console.log("Checking for support, hardware and adapter.");
+                if (!navigator.gpu) {
+                    throw new Error("WebGPU not supported by your browser.");
+                }
+
+                adapter = await navigator.gpu.requestAdapter();
+                if (!adapter){
+                    throw new Error("WebGPU Supported but not appropriate hardware.");
+                }
+
+                device = await adapter.requestDevice();
+                if (!device) {
+                    throw new Error("Error supporting WebGPU in your browser");
+                }
+
+                console.log("Getting the WebGPU context from our canvas element and configuring it.");
+                canvas = document.querySelector('canvas');
+                context = canvas.getContext('webgpu');
+                canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+                context.configure({
+                    device,
+                    format: canvasFormat,
+                });
+            } 
+
+        async function startup() {
+            console.log("Doing all the loading...")
+
+            console.log("Loading Shader files...")
+            $.ajax({
+                    type: "GET",
+                    url: "shaders/09_simple_vs.wgsl",
+                    async: false,
+                    success: function(response) { vsShaderFile = response; }
+                 });
+            $.ajax({
+                type: "GET",
+                url: "shaders/09_simple_fs.wgsl",
+                async: false,
+                success: function(response) { fsShaderFile = response; }
+                });
+
+            vsModule = device.createShaderModule({
+                label: 'Simple VS ',
+                code: vsShaderFile,
+            });
+            fsModule = device.createShaderModule({
+                label: 'Simple FS ',
+                code: fsShaderFile,
+            });
+
+            //making binding group layout
+            bindGroupLayout = device.createBindGroupLayout({        // new: Create a group layout
+                    entries: [{
+                        binding: 0,      // modelMatrix @binding(0)
+                        visibility: GPUShaderStage.VERTEX,
+                        buffer: {},
+                    }, {
+                        binding: 1,      // modelMatrixRot @binding(1)
+                        visibility: GPUShaderStage.VERTEX,
+                        buffer: {},
+                    }]
+                });
+
+                console.log('Creating pipeline layout...');
+                pipelineLayout = device.createPipelineLayout({          // new: Create pipeline layout
+                    bindGroupLayouts: [
+                        bindGroupLayout, // @group(0)
+                    ]
+                });
+
+                console.log('Creating pipeline...');
+            pipeline = device.createRenderPipeline({
+                    label: 'Hardcoded pipeline',
+                    layout: pipelineLayout, //changed to pipeline layout from buffer
+                    vertex: {
+                        module: vsModule,
+                        entryPoint: 'vs',
+                        buffers: [              
+                            {                       // define  vbo
+                                arrayStride: 2 * 4, //2x4bytes //how big this is
+                                attributes: [
+                                    //shaderlocation matches with the @location(0) in the shader, vec2 ^ is why this is a 2.
+                                    {shaderLocation: 0, offset:0 , format: 'float32x2'},
+                                ],
+                            },
+
+                            {                       // define colors
+                                arrayStride: 4 * 4, //4x4bytes
+                                attributes: [
+                                    {shaderLocation: 1, offset:0 , format: 'float32x4'},
+                                ],
+                            }
+                        ],
+                    },
+                    fragment: {
+                        module: fsModule,
+                        entryPoint: 'fs',
+                        targets: [{ format: canvasFormat }],
+                    },
+                });
+
+            
+                console.log("Gathering vertex, color, index, transformation data...");
+
+            //load object
+            const loader = new Loader();
+            const objFile = await loader.load('meshes/testCube.obj');
+            //load materials in later
+            //const mtlFile = await loader.load('meshes/testCube.mtl');
+
+            const parsedObject = await loader.parse(objFile);
+            positions = parsedObject.positions; //could pass positions
+            indices = parsedObject.indices; //could pass indices
+
+            console.log("Loaded positions:", positions);
+            console.log("Loaded indices:", indices);
+
+            //loader vertexes positions
+                // Load geomtery
+                // const vertexData = new Float32Array([
+                //     -0.5,  0.5, // top left
+                //     -0.5, -0.5, // bottom left
+                //      0.5, -0.5, // bottom right
+                //      0.5,  0.5, // top right
+                // ]);
+
+                // load colours
+                const colorData = new Float32Array([
+                    1.0, 0.0, 0.0, 1.0, // red
+                    0.0, 1.0, 0.0, 1.0,// green
+                    0.0, 0.0, 1.0, 1.0, // blue
+                    1.0, 1.0, 1.0, 1.0, // white
+                ]);
+
+                //loader indices
+                // Load index Data
+                // const indexData = new Uint32Array([
+                //     0, 1, 2, 0, 2, 3
+                // ]);
+
+                //translation
+                let modelMatrix = mat4.create();
+                mat4.identity(modelMatrix);
+                modelMatrix = mat4.translate(modelMatrix, [0.5, 0.0, 0.0]);
+                const uniformData0 = modelMatrix;
+
+                //rotation
+                modelMatrixRot = mat4.create();
+                mat4.identity(modelMatrixRot);
+                modelMatrixRot = mat4.rotate(modelMatrixRot, [0.0, 0.0, 1.0], 45.0 * (Math.PI/180.0) );
+                //modelMatrixRot = mat4.translate(modelMatrixRot, [0.5, 0.0, 0.0]);
+                //modelMatrixRot = mat4.scale(modelMatrixRot, [1.0, 1.0, 1.0]);
+                const uniformData1 = modelMatrixRot;
+
+
+                //need to change this buffer
+                vertexBuffer = device.createBuffer({
+                    label: 'vertex buffer object',
+                    size: positions.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                });
+                device.queue.writeBuffer(vertexBuffer, 0, positions);
+
+                colorBuffer = device.createBuffer({
+                    label: 'color attribute object',
+                    size: colorData.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                });
+                device.queue.writeBuffer(colorBuffer, 0, colorData);
+
+                indexBuffer = device.createBuffer({
+                    label: 'index buffer',
+                    size: indices.byteLength,
+                    usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+                });
+                device.queue.writeBuffer(indexBuffer, 0, indices);
+
+                uniformBuffer0 = device.createBuffer({            // New: Create a uniform buffer
+                    label: 'uniform buffer',
+                    size: uniformData0.byteLength,
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+                });
+                device.queue.writeBuffer(uniformBuffer0, 0, uniformData0);
+
+                uniformBuffer1 = device.createBuffer({            // New: Create a uniform buffer
+                    label: 'uniform buffer',
+                    size: uniformData1.byteLength,
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+                });
+                device.queue.writeBuffer(uniformBuffer1, 0, uniformData1);
+
+                // create bind group with the resources
+                // note: layout and binding can't be changed without redoing the pipeline, resources can be updated.
+                console.log('Creating bind groups...');
+                bindGroup = device.createBindGroup({
+                    layout: bindGroupLayout,
+                    entries: [{
+                            binding: 0,
+                            resource: { buffer: uniformBuffer0 }                
+                        }, {
+                            binding: 1,
+                            resource: { buffer: uniformBuffer1 }
+                        }]
+                });
+
+                console.log('Creating Render Pass Descriptor...');
+                renderPassDescriptor = {
+                    label: 'Basic canvas render pass',
+                    colorAttachments: [
+                    {
+                        //view: canvasFormat, //maybe add canvas
+                        //view: 'canvas',
+                        clearValue: [1.0, 1.0, 1.0, 1.0],
+                        loadOp: 'clear',  // clear or store (draw on top)
+                        storeOp: 'store', // store or clear (throw away - e.g. multisampling)
+                    },
+                    ],
+                };
+                console.log('Finish all loading at startup...');
+        }
+
+        function render() {
+                // Calculate FPS
+                now = Date.now();
+                const deltaTime = now - then;
+                let fps = (1000.0 / (deltaTime));
+                then = now;
+                //console.log("Rendering frame (" + Date().toLocaleString() + ") at " + fps.toFixed(2) +" FPS.");
+
+                // Get the current texture from the canvas context and set it as the texture to render.
+                renderPassDescriptor.colorAttachments[0].view = 
+                context.getCurrentTexture().createView();
+
+                // Create a command encoder to start encoding commands
+                const encoder = device.createCommandEncoder({ label: 'the encoder' });
+
+                // Create a render pass encoder to encode render commands
+                const pass = encoder.beginRenderPass(renderPassDescriptor);
+                pass.setPipeline(pipeline);
+                pass.setVertexBuffer(0, vertexBuffer);      // Set WebGPU using VBO
+                pass.setVertexBuffer(1, colorBuffer);       // Set WebGPU using colors
+                pass.setIndexBuffer(indexBuffer, 'uint16'); // Set WebGPU using index data, match this indices
+                pass.setBindGroup(0, bindGroup); //set group(0);
+                pass.drawIndexed(indices.length, 1);           // draw indices from object
+                pass.end();
+
+                const commandBuffer = encoder.finish();
+                
+                device.queue.submit([commandBuffer]);
+
+                // Option 2 loop: 
+                //requestAnimationFrame(render);  
+            }
+
+            // start code
+            await setup();
+            startup();
+            
+            // Option 1 loop: define FPS
+            const UPDATE_INTERVAL = 1000.0 /30.0; 
+            setInterval(render, UPDATE_INTERVAL);
+    
+            // Option 2 loop: match display rate
+            //requestAnimationFrame(render);   
+
+            // Check for resize
+            const observer = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                const canvas = entry.target;
+                const width = entry.contentBoxSize[0].inlineSize;
+                const height = entry.contentBoxSize[0].blockSize;
+                canvas.width = Math.max(1, Math.min(width, device.limits.maxTextureDimension2D));
+                canvas.height = Math.max(1, Math.min(height, device.limits.maxTextureDimension2D));
+            }
+            });
+            observer.observe(canvas);
+        } 
+        main();
+    </script>
+
+</body>
+</html>
