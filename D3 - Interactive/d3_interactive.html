@@ -1,0 +1,625 @@
+<!doctype html>
+
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>2024-2025 F20GA: Coursework 3</title>
+        <script src="libraries/jquery-3.7.1.min.js"></script>
+        <script src="https://wgpu-matrix.org/dist/3.x/wgpu-matrix.js"></script>
+</head>
+
+<style>
+    html, body {
+      margin: 0;       /* remove the default margin          */
+      height: 100%;    /* make the html,body fill the page   */
+      font-family: Helvetica, sans-serif;
+    }
+    .header {
+        text-align: center;
+        padding:10px;
+        background-color: #afa8f2;
+        font-size: 24px;
+    }
+
+    .description {
+        text-align: center;
+        margin: 10px 0;
+    }
+
+    .canvas-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        height: 500px;
+    }
+
+    canvas {
+      display: block;  /* make the canvas act like a block   */
+      width: 50%;     /* make the canvas fill its container */
+      height: 50%;
+      padding: 0;
+      margin: auto;
+      position: absolute;
+    top: 25%;
+    left: 25%;
+    border-style: solid;
+    border-radius: 5%;
+    border-color: black;
+    }
+
+    .arrow {
+        position: absolute;
+        background: #ddd;
+        border: none;
+        padding: none;
+        cursor: pointer;
+        font-size: 18px;    
+    }
+    
+</style>
+
+<body>
+    <div id = "app">
+        <header class="header">Group 1's Object Explorer</header>
+        <div class="description">Stuff in a Student's Room</div>
+        <div class="canvas-container">
+            <button class="arrow left">&lt;</button>
+            <canvas id="canvasElement"></canvas>
+            <button class="arrow right">&gt;</button>
+        </div>    
+        <div class="object-info">
+            <div class="object-name">OBJECT NAME HERE</div>
+            <div class="object-description">A BRIEF DESCRIPTION OF THE OBJECT HERE</div>
+        </div>
+    </div>
+    <script type="module">
+        // Variables
+        const { vec2, vec3, mat4 } = wgpuMatrix; //used to define elements from wgpu-matrix library
+
+        let adapter;
+        let device;
+        let canvas;
+        let context;
+        let canvasFormat;
+        let vsShaderFile;
+        let fsShaderFile;
+        let vsModule;
+        let fsModule;
+        let vertexBuffer;  // VBO
+        let colorBuffer;  
+        let indexBuffer; 
+        let pipeline;
+        let renderPassDescriptor;
+        let then = Date.now();
+        let now = 0;
+        //define the object stuff up here
+        let indices;
+        let positions;
+        let colorData;
+        let uvs;
+
+        //from example 8
+        let bindGroupLayout;    // new
+        let pipelineLayout;     // new
+        let bindGroup;          // new
+        let uniformBuffer0;     // new
+        let uniformBuffer1;     // new
+        let modelMatrixRot;     // new
+        let angle = 45.0;
+        //from example 9
+        let canvasWidth;        //new
+        let canvasHeight;       //new
+        let projectionMatrix;       // new  
+        let canvasElement;                 // new
+        //example 10
+        let modelMatrix;            // new
+        let depthStencilTexture;    // new depth   
+        let depthStencilState;      // new   
+        let depthStencilView;       // new
+        let depthStencilAttachment; // new
+        //example 12
+        let uniformBufferView;
+        let viewMatrix;
+        let cameraRadius = 0.5; //this zooms this in
+        let cameraRadiusAngle = 0.0;   
+        //example 13
+        let cameraPosition = vec3.create(0.0, 0.0, 20.0);       // new
+        let cameraFront = vec3.create(0.0, 0.0, -1.0);           // new
+        let cameraUp = vec3.create(0.0, 1.0, 0.0);              // new
+        let cameraSpeed = 0.5;                                   // new
+        let keys = {};                                          // new  
+        //example 15
+        let texture; 
+        let textureBuffer;  // New 
+
+    
+        // Note: type module is needed for top-level awaits (e.g. awaits outside of async functions)
+ 
+        // Graphics are quite difficult to debug (blank screen) - so adding debugging messages.
+        console.log("Starting WebGPU code (" + Date().toLocaleString() + ").");
+
+        //import loader
+        import Loader from './Loader.js';
+ 
+        async function main() {
+
+        async function setup(){
+            console.log("Checking for support, hardware and adapter.");
+            if (!navigator.gpu) {
+                throw new Error("WebGPU not supported by your browser.");
+            }
+
+            adapter = await navigator.gpu.requestAdapter();
+            if (!adapter){
+                throw new Error("WebGPU Supported but not appropriate hardware.");
+            }
+
+            device = await adapter.requestDevice();
+            if (!device) {
+                throw new Error("Error supporting WebGPU in your browser");
+            }
+
+            console.log("Getting the WebGPU context from our canvas element and configuring it.");
+            canvas = document.querySelector('canvas');
+            context = canvas.getContext('webgpu');
+            canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+            context.configure({
+                device,
+                format: canvasFormat,
+            });
+        }
+        
+        function create_pipeline() {{
+            //as per example 10, need to seperate pipeline
+            console.log("Create structures for depth comparison...");
+                depthStencilState = {
+                    format: 'depth24plus-stencil8',
+                    depthWriteEnabled: true,
+                    depthCompare: 'less-equal',
+                };
+
+                depthStencilTexture = device.createTexture({
+                    size: { width: canvasWidth, height: canvasHeight, depthOrArrayLayers: 1 },
+                    format: 'depth24plus-stencil8',
+                    usage: GPUTextureUsage.RENDER_ATTACHMENT 
+                });
+
+                depthStencilView = depthStencilTexture.createView({
+                    format: 'depth24plus-stencil8',
+                    dimension: '2d',    
+                    aspect: 'all',
+                });
+
+                depthStencilAttachment = {
+                    view: depthStencilView,
+                    depthClearValue: 1.0,
+                    depthLoadOp: 'clear',
+                    depthStoreOp: 'store',
+                    stencilLoadOp: 'clear',
+                    stencilStoreOp: 'discard',
+                };
+
+                console.log('Creating pipeline...');
+            pipeline = device.createRenderPipeline({
+                    label: 'Hardcoded pipeline',
+                    layout: pipelineLayout, //changed to pipeline layout from buffer
+                    vertex: {
+                        module: vsModule,
+                        entryPoint: 'vs',
+                        buffers: [              
+                            {                       // define  vbo
+                                arrayStride: 3 * 4, //3x4bytes //how big this is, made it 3 for 3 positions
+                                attributes: [
+                                    //shaderlocation matches with the @location(0) in the shader, vec2 ^ is why this is a 2.
+                                    {shaderLocation: 0, offset:0 , format: 'float32x3'},
+                                ],
+                            },
+
+                            {                       // define colors
+                                arrayStride: 4 * 4, //4x4bytes
+                                attributes: [
+                                    {shaderLocation: 1, offset:0 , format: 'float32x4'},
+                                ],
+                            },
+                            {
+                                arrayStride: 2 * 4,
+                                attributes: [
+                                    {
+                                        shaderLocation: 2, offset: 0, format: 'float32x2'
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                    fragment: {
+                        module: fsModule,
+                        entryPoint: 'fs',
+                        targets: [{ 
+                            format: canvasFormat,
+                            blend: {
+                                color: {
+                                    operation: 'add',
+                                    srcFactor: 'one',
+                                    dstFactor: 'one-minus-src-alpha',
+                                },
+                                alpha: {
+                                    operation: 'add',
+                                    srcFactor: 'one',
+                                    dstFactor: 'one-minus-src-alpha',
+                                }
+                            },
+                        }],
+                    },
+                    primitive: {
+                        topology : 'triangle-list',          // new: we are just using a list of triangles for cube
+                    },
+                    cullMode: 'none',
+                    depthStencil: depthStencilState,
+                });
+
+                console.log('Creating Render Pass Descriptor...');
+                renderPassDescriptor = {
+                    label: 'Basic canvas render pass',
+                    colorAttachments: [
+                    {
+                        //view: later for rendering
+                        clearValue: [1.0, 1.0, 1.0, 1.0],
+                        loadOp: 'clear',  // clear or store (draw on top)
+                        storeOp: 'store', // store or clear (throw away - e.g. multisampling)
+                    },],
+                    depthStencilAttachment: depthStencilAttachment,
+                };
+        }};
+
+        async function startup() {
+            console.log("Loading Shader files...")
+            $.ajax({
+                    type: "GET",
+                    url: "shaders/15_simple_vs.wgsl",
+                    async: false,
+                    success: function(response) { vsShaderFile = response; }
+                 });
+            $.ajax({
+                type: "GET",
+                url: "shaders/15_simple_fs.wgsl",
+                async: false,
+                success: function(response) { fsShaderFile = response; }
+                });
+
+            vsModule = device.createShaderModule({
+                label: 'Simple VS ',
+                code: vsShaderFile,
+            });
+            fsModule = device.createShaderModule({
+                label: 'Simple FS ',
+                code: fsShaderFile,
+            });
+
+            console.log('Creating layout for Group...');
+            //making binding group layout
+            bindGroupLayout = device.createBindGroupLayout({        // new: Create a group layout
+                    entries: [{
+                        binding: 0,      // modelMatrix @binding(0)
+                        visibility: GPUShaderStage.VERTEX,
+                        buffer: {},
+                    }, {
+                        binding: 1,      // modelMatrixRot @binding(1)
+                        visibility: GPUShaderStage.VERTEX,
+                        buffer: {},
+                    },
+                    {
+                        binding: 2,      // viewMatrix @binding(2)         // new: pass view matrix
+                        visibility: GPUShaderStage.VERTEX,
+                        buffer: {},
+                    },
+                    {
+                        binding: 3, //sampler @binding(3)
+                        visibility: GPUShaderStage.FRAGMENT,
+                        sampler: {}
+                    },
+                    {
+                        binding: 4, //sampler @binding(4)
+                        visibility: GPUShaderStage.FRAGMENT,
+                        texture: {sampleType: 'float', viewDimension: '2d', multisampled: false,}
+                    }]
+                });
+
+                console.log('Creating pipeline layout...');
+                pipelineLayout = device.createPipelineLayout({          // new: Create pipeline layout
+                    bindGroupLayouts: [
+                        bindGroupLayout, // @group(0)
+                    ]
+                });
+
+            canvasWidth = canvas.width;
+            canvasHeight = canvas.height;
+            create_pipeline();
+            
+            console.log("Gathering vertex, color, index, transformation data...");
+
+            //load object
+            const loader = new Loader();
+            const objFile = await loader.load('meshes/mushroomLamp.obj');
+            //load materials in later
+            //const mtlFile = await loader.load('meshes/testCube.mtl');
+            let response = await fetch('textures/mushroomLamp.png');
+            let blob = await response.blob(); //get blob from resppnse
+            let imageBitmap = await createImageBitmap(blob); //create imagebitmap from the blob
+
+            const parsedObject = await loader.parse(objFile);
+            positions = parsedObject.positions; //could pass positions
+            indices = parsedObject.indices; //could pass indices
+            uvs = parsedObject.uvs;
+
+            // const textureData = new Float32Array([
+            //         0.0, 0.0, // Bottom-left
+            //         1.0, 0.0, // Bottom-right
+            //         0.0, 1.0, // Top-left
+            //         1.0, 1.0, // Top-right
+            //     ]);
+            //const textureData = uvs;
+            const textureData = parsedObject.uvs;
+
+            //console.log("Loaded positions:", positions);
+            //console.log("Loaded indices:", indices);
+                // load colours
+                const vertexCount = positions.length / 3; //3 for 3d
+
+                const colorData = new Float32Array(vertexCount * 4);
+                //make all vertices red
+                for (let i = 0; i < vertexCount; i++)
+                {
+                    colorData.set([1.0, 0.0, 0.0, 1.0], i * 4);
+                }
+
+                //translation
+                let modelMatrix = mat4.create();
+                mat4.identity(modelMatrix);
+                modelMatrix = mat4.translate(modelMatrix, [1.0, 1.0, -0.5]);
+                modelMatrix = mat4.rotate(modelMatrix, [0.0, 1.0, 0.0], angle * (Math.PI/180.0) ); //added rotation from example 9
+                const uniformData0 = modelMatrix;
+
+                //projections
+                canvasWidth = canvas.width;
+                canvasHeight = canvas.height;
+                projectionMatrix = mat4.perspective(60.0 * Math.PI / 180.0, canvasWidth / canvasHeight, 0.1, 1000.0);
+                const uniformData1 = projectionMatrix;
+
+                //console.log("POSITIONS BEING READ:" + positions);
+                // for (let i = 0; i < positions.length; i += 3) {
+                //     console.log(`Position ${i / 3}: x=${positions[i]}, y=${positions[i + 1]}, z=${positions[i + 2]}`);
+                // }
+
+                // View
+                let camX = Math.sin(cameraRadiusAngle) * cameraRadius; 
+                let camZ = Math.cos(cameraRadiusAngle) * cameraRadius;
+                let eye = [camX, 0.0, camZ];
+                let target = [0.0, 0.0, 0.0];
+                let up = [0.0, 0.0, 0.0];
+                //viewMatrix = mat4.lookAt(eye, target, up);
+                viewMatrix = mat4.lookAt(
+                        cameraPosition, 
+                        vec3.add(cameraPosition, cameraFront),
+                        cameraUp);
+
+
+                console.log("Creating Buffers...");
+                //need to change this buffer
+                vertexBuffer = device.createBuffer({
+                    label: 'vertex buffer object',
+                    size: positions.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                });
+                device.queue.writeBuffer(vertexBuffer, 0, positions);
+
+                colorBuffer = device.createBuffer({
+                    label: 'color attribute object',
+                    size: colorData.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                });
+                device.queue.writeBuffer(colorBuffer, 0, colorData);
+
+                indexBuffer = device.createBuffer({
+                    label: 'index buffer',
+                    size: indices.byteLength,
+                    usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+                });
+                device.queue.writeBuffer(indexBuffer, 0, indices);
+
+                uniformBuffer0 = device.createBuffer({            // New: Create a uniform buffer
+                    label: 'uniform buffer',
+                    size: uniformData0.byteLength,
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+                });
+                device.queue.writeBuffer(uniformBuffer0, 0, uniformData0);
+
+                uniformBuffer1 = device.createBuffer({            // New: Create a uniform buffer
+                    label: 'uniform buffer',
+                    //size: uniformData1.byteLength,
+                    size: projectionMatrix.byteLength,
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+                });
+                //device.queue.writeBuffer(uniformBuffer1, 0, projectionMatrix);
+                device.queue.writeBuffer(uniformBuffer1, 0, uniformData1);
+
+                
+                //adding a view buffer
+                uniformBufferView = device.createBuffer({           
+                    label: 'uniform buffer',
+                    size: viewMatrix.byteLength,
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+                });
+                device.queue.writeBuffer(uniformBufferView, 0, viewMatrix);
+
+                textureBuffer = device.createBuffer({               // New
+                    label: 'texture buffer',
+                    size: textureData.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                });
+                device.queue.writeBuffer(textureBuffer, 0, textureData);
+
+                //TEXTURE
+                // Create a texture                         // New
+                texture = device.createTexture({
+                    size: [imageBitmap.width, imageBitmap.height],
+                    format: 'rgba8unorm',
+                    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
+                });
+                device.queue.copyExternalImageToTexture(            // Similar to writeBuffer but for textures
+                    { source: imageBitmap },
+                    { texture: texture },
+                    [imageBitmap.width, imageBitmap.height]
+                );
+
+                // Create a sampler                         // New
+                const sampler = device.createSampler({
+                    addressModeU: 'clamp-to-edge',
+                    addressModeV: 'clamp-to-edge',
+                    magFilter: 'linear',
+                    minFilter: 'linear',
+                });
+
+                // create bind group with the resources
+                // note: layout and binding can't be changed without redoing the pipeline, resources can be updated.
+                console.log('Creating bind groups...');
+                bindGroup = device.createBindGroup({
+                    layout: bindGroupLayout,
+                    entries: [{
+                            binding: 0,
+                            resource: { buffer: uniformBuffer0 }                
+                        }, {
+                            binding: 1,
+                            resource: { buffer: uniformBuffer1 }
+                        }, {
+                            binding: 2,
+                            resource: { buffer: uniformBufferView }
+                        },
+                        {
+                            binding: 3,
+                            resource: sampler //get from texture sampler
+                        },
+                        {
+                            binding: 4,
+                            resource: texture.createView({dimension: '2d',})
+                        }
+                    ]
+                });
+
+                console.log('Finish all loading at startup...');
+        }
+
+        function render() {
+                // Calculate FPS
+                now = Date.now();
+                const deltaTime = now - then;
+                let fps = (1000.0 / (deltaTime));
+                then = now;
+                //console.log("Rendering frame (" + Date().toLocaleString() + ") at " + fps.toFixed(2) +" FPS.");
+
+                //now add canvas stuff here
+                projectionMatrix = mat4.perspective(60.0 * Math.PI / 180.0, canvasWidth / canvasHeight, 0.1, 1000.0);
+                device.queue.writeBuffer(uniformBuffer1, 0, projectionMatrix);
+
+                //camera stuff
+                cameraSpeed = 0.02 * deltaTime;
+                for (var key in keys){
+                    if (key == 38) cameraPosition = vec3.add(cameraPosition, vec3.mulScalar(cameraFront, cameraSpeed));
+                    if (key == 40) cameraPosition = vec3.subtract(cameraPosition, vec3.mulScalar(cameraFront, cameraSpeed));
+                    if (key == 37) cameraPosition = vec3.subtract(cameraPosition, vec3.mulScalar(vec3.normalize(vec3.cross(cameraFront, cameraUp)), cameraSpeed));
+                    if (key == 39) cameraPosition = vec3.add(cameraPosition, vec3.mulScalar(vec3.normalize(vec3.cross(cameraFront, cameraUp)), cameraSpeed));
+                }
+
+                viewMatrix = mat4.lookAt(
+                        cameraPosition, 
+                        vec3.add(cameraPosition, cameraFront),
+                        cameraUp);
+                device.queue.writeBuffer(uniformBufferView, 0, viewMatrix);
+
+                // cameraRadiusAngle = 0.002;
+                // viewMatrix = mat4.lookAt(
+                //     [Math.sin(cameraRadiusAngle) * cameraRadius, 0.0, Math.cos(cameraRadiusAngle) * cameraRadius], 
+                //     [0.0, 0.0, 0.0],  //transform of the camera
+                //     [0.0, 50.0, 0.0] 
+                // );
+                // device.queue.writeBuffer(uniformBufferView, 0, viewMatrix);
+
+
+                //object rotation and translation (modelMatrix)
+                angle = angle + 1.0; //animation
+                modelMatrix = mat4.create();
+                mat4.identity(modelMatrix);
+                modelMatrix = mat4.scale(modelMatrix, [1.0, 1.0, 1.0]);
+                modelMatrix = mat4.translate(modelMatrix, [0.0, -1.0, 15.0]); //move down a bit and move slightly back
+                modelMatrix = mat4.rotate(modelMatrix, [0.0, 1.0, 0.0], angle * (Math.PI/180.0) );
+                device.queue.writeBuffer(uniformBuffer0, 0, modelMatrix);
+
+                // Get the current texture from the canvas context and set it as the texture to render.
+                renderPassDescriptor.colorAttachments[0].view = 
+                context.getCurrentTexture().createView();
+
+                // Create a command encoder to start encoding commands
+                const encoder = device.createCommandEncoder({ label: 'the encoder' });
+
+                // Create a render pass encoder to encode render commands
+                const pass = encoder.beginRenderPass(renderPassDescriptor);
+                canvas = document.getElementById("canvas"); // new
+                pass.setViewport(0, 0, canvasWidth, canvasHeight, 0, 1);   // new
+                pass.setPipeline(pipeline);
+                pass.setVertexBuffer(0, vertexBuffer);      // Set WebGPU using VBO
+                pass.setVertexBuffer(1, colorBuffer);       // Set WebGPU using colors
+                pass.setVertexBuffer(2, textureBuffer);
+                pass.setIndexBuffer(indexBuffer, 'uint16'); // Set WebGPU using index data, match this indices
+                pass.setBindGroup(0, bindGroup); //set group(0);
+                pass.drawIndexed(indices.length, 1);           // draw indices from object
+                pass.end();
+
+                const commandBuffer = encoder.finish();
+                
+                device.queue.submit([commandBuffer]);
+
+                // Option 2 loop: 
+                //requestAnimationFrame(render);  
+            }
+
+            // start code
+            await setup();
+            startup();
+            
+            // Option 1 loop: define FPS
+            const UPDATE_INTERVAL = 1000.0 /30.0; 
+            setInterval(render, UPDATE_INTERVAL);
+    
+            // Option 2 loop: match display rate
+            //requestAnimationFrame(render);   
+
+            // Check for resize
+            const observer = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                const canvas = entry.target;
+                const width = entry.contentBoxSize[0].inlineSize;
+                const height = entry.contentBoxSize[0].blockSize;
+                canvas.width = Math.max(1, Math.min(width, device.limits.maxTextureDimension2D));
+                canvas.height = Math.max(1, Math.min(height, device.limits.maxTextureDimension2D));
+                canvasWidth = canvas.width;
+                canvasHeight = canvas.height;
+                console.log("OBSERVER Viewport dimensions:", canvasWidth, canvasHeight);
+                
+                create_pipeline();
+            }
+            });
+            observer.observe(canvas);
+
+            // Check for key presses
+            $(document).keydown(function (e) {
+                keys[e.which] = true;
+            });
+            $(document).keyup(function (e) {
+                delete keys[e.which];
+            });
+        } 
+        main();
+    </script>
+
+</body>
+</html>
