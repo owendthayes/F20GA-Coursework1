@@ -1,0 +1,694 @@
+<!doctype html>
+
+<html>
+<!-- THINGS THAT NEED CHANGED 
+ 1. REMOVE THIS LIST
+ 5. CHANGE DEFAULT CAMERA POSITION DEPENDING ON OBJECT?-->
+<head>
+    <meta charset="utf-8">
+    <title>2024-2025 F20GA: Coursework 3</title>
+    <script src="libraries/jquery-3.7.1.min.js"></script>
+    <script src="https://wgpu-matrix.org/dist/3.x/wgpu-matrix.js"></script>
+</head>
+
+<link rel="stylesheet" href="style.css">
+
+<body>
+    <div id = "app"> <!-- Start HTML for the webpage -->
+        <header class="header">Group 1's Object Explorer</header>
+        <div class="description">Stuff in a Student's Room</div>
+        <div class="canvas-container">
+            <!--navigation to other objects using the buttons, different webpages contain different object-->
+            <!---CHANGE THE PAGE NAMES BASED ON THE OBJECTS ############################################################-->
+            <button class="arrow left" onclick="window.location.href = 'd3_interactive_mushroomLamp.html';">&lt;</button>
+            <canvas id="canvasElement"></canvas>
+            <button class="arrow right" onclick = "window.location.href = 'd3_interactive_vivarium.html';">&gt;</button>
+        </div>    
+        <div class="object-info">
+            <div class="object-name">An Acoustic Guitar</div>
+            <div class="object-description">A classic acoustic guitar with rich, warm tones — crafted for serenades, soulful melodies, and moments of inspiration.</div>
+            <div class="menu-instructions">Use the arrow keys to pan the camera. Use - and + keys to zoom in and out.</div>
+
+                </div>
+    </div> <!-- End HTML for the webpage -->
+    <script type="module">
+        //-----VARIABLES-----//
+        
+        const { vec2, vec3, vec4, mat4 } = wgpuMatrix; //used to define elements from wgpu-matrix library
+
+        //Shader and buffer variables
+        let adapter;
+        let device;
+        let canvas;
+        let context;
+        let canvasFormat;
+        let vsShaderFile;
+        let fsShaderFile;
+        let vsModule;
+        let fsModule;
+        let vertexBuffer;
+        let colorBuffer;  
+        let indexBuffer; 
+        let pipeline;
+        let renderPassDescriptor;
+        let then = Date.now();
+        let now = 0;
+        //Object variables
+        let indices;
+        let positions;
+        let colorData;
+        let uvs;
+
+        //Binding group variables
+        let bindGroupLayout;
+        let pipelineLayout;
+        let bindGroup;
+        let uniformBuffer0;
+        let uniformBuffer1;
+
+        //Canvas/Projection/Matrix variables
+        let canvasWidth;
+        let canvasHeight;
+        let projectionMatrix;
+        let canvasElement;
+        let modelMatrixRot;
+        let angle = 45.0;
+        let modelMatrix;
+        let depthStencilTexture; 
+        let depthStencilState;
+        let depthStencilView;
+        let depthStencilAttachment;
+        let uniformBufferView;
+        let viewMatrix;
+
+        //Camera variables
+        let cameraRadius = 0.5; //this variable zooms the camera in
+        let cameraRadiusAngle = 0.0;   
+        let cameraPosition = vec3.create(0.0, 0.7, 20.5);
+        let cameraFront = vec3.create(0.0, 0.0, -1.0);
+        let cameraUp = vec3.create(0.0, 1.0, 0.0);
+        let cameraSpeed = 0.5;
+        let keys = {};
+        
+        //Texture variable
+        let texture; 
+        let textureBuffer;
+        
+        //Normals variables
+        let normalBuffer;
+        let rotationAngles = [];
+        let uniformBufferNormalMatrix;
+        let uniformBufferLight;
+        let uniformBufferMaterial;
+        let uniformBufferCameraPosition;
+        let uniformBufferLightPosition;
+        let normalMatrices; 
+
+        //Lighting variables
+        let light;
+        let ka = 1.0; //ambient constant
+        let ia = vec4.create(0.5, 0.5, 0.5, ka); //ambient
+        let kd = 1.0; //diffuse constant
+        let id = vec4.create(0.90, 0.90, 0.50, kd); //diffuse
+        let ks = 0.8;  //specular constant
+        let is = vec4.create(0.90, 0.90, 0.70, ks); //specular
+        let shininess = vec4.create(40.0, 0.0, 0.0, 0.0); //shininess
+        let lightPosition = vec4.create(5.0, 0.0, 20.0, 1.0);
+     
+        //----DEBUGGING MESSAGES----///
+        console.log("Starting WebGPU code (" + Date().toLocaleString() + ").");
+
+        //import loader
+        import Loader from './Loader.js';
+
+        async function main() {
+        //check that webGPU will work with user's system
+        async function setup(){
+            console.log("Checking for support, hardware and adapter.");
+            if (!navigator.gpu) {
+                throw new Error("WebGPU not supported by your browser.");
+            }
+
+            adapter = await navigator.gpu.requestAdapter();
+            if (!adapter){
+                throw new Error("WebGPU Supported but not appropriate hardware.");
+            }
+
+            device = await adapter.requestDevice();
+            if (!device) {
+                throw new Error("Error supporting WebGPU in your browser");
+            }
+
+            
+            console.log("Getting the WebGPU context from our canvas element and configuring it.");
+            canvas = document.querySelector('canvas');
+            context = canvas.getContext('webgpu');
+            canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+            context.configure({
+                device,
+                format: canvasFormat,
+                alphaMode: 'premultiplied',
+            });
+        }
+        
+        function create_pipeline() {{
+            console.log("Create structures for depth comparison...");
+            //Depth stencil added to give depth to the object's pixels on screen (on the canvas).
+                depthStencilState = {                    
+                    format: 'depth24plus-stencil8',
+                    depthWriteEnabled: true,
+                    depthCompare: 'less-equal',
+                };
+                
+                depthStencilTexture = device.createTexture({
+                    size: { width: canvasWidth, height: canvasHeight, depthOrArrayLayers: 1 },
+                    format: 'depth24plus-stencil8',
+                    usage: GPUTextureUsage.RENDER_ATTACHMENT 
+                });
+
+                depthStencilView = depthStencilTexture.createView({
+                    format: 'depth24plus-stencil8',
+                    dimension: '2d',    
+                    aspect: 'all',
+                });
+
+                depthStencilAttachment = {
+                    view: depthStencilView,
+                    depthClearValue: 1.0,
+                    depthLoadOp: 'clear',
+                    depthStoreOp: 'store',
+                    stencilLoadOp: 'clear',
+                    stencilStoreOp: 'discard',
+                };
+
+                console.log('Creating pipeline...');
+            pipeline = device.createRenderPipeline({
+                    label: 'Hardcoded pipeline',
+                    layout: pipelineLayout, //changed to pipeline layout from buffer
+                    vertex: {
+                        module: vsModule,
+                        entryPoint: 'vs',
+                        buffers: [              
+                            {  
+                                // define  vbo, shaderlocation matches with the @location(0) in the shader, vec2 ^ is why this is a 2.
+                                arrayStride: 3 * 4, //3x4bytes
+                                attributes: [{shaderLocation: 0, offset:0 , format: 'float32x3'},],
+                            },
+                            {
+                                //colour coordinates
+                                arrayStride: 4 * 4, //4x4bytes
+                                attributes: [{shaderLocation: 1, offset:0 , format: 'float32x4'},],
+                            },
+                            {
+                                //texture coordinates
+                                arrayStride: 2 * 4,
+                                attributes: [{shaderLocation: 2, offset: 0, format: 'float32x2'},],                           
+                            },
+                            {
+                                //normal coordinates
+                                arrayStride: 3 * 4, //3x4bytes
+                                attributes: [{shaderLocation: 3, offset:0 , format: 'float32x3'},],
+                            }
+                        ],
+                    },
+                    fragment: {
+                        module: fsModule,
+                        entryPoint: 'fs',
+                        targets: [{ 
+                            format: canvasFormat,
+                            blend: {
+                                //How the color and alpha are to be processed in our render.
+                                color: {
+                                    operation: 'add',
+                                    srcFactor: 'one',
+                                    dstFactor: 'one-minus-src-alpha',
+                                },
+                                alpha: {
+                                    operation: 'add',
+                                    srcFactor: 'one',
+                                    dstFactor: 'one-minus-src-alpha',
+                                }
+                            },
+                        }],
+                    },
+                    primitive: {
+                        //the topology of our objects are triangles
+                        topology : 'triangle-list',
+                    },
+                    //set culling mode to none
+                    cullMode: 'none',
+                    //make faces front (for normals)
+                    frontFace: 'ccw',
+                    depthStencil: depthStencilState,
+                });
+
+                //Render pass used to pass in information and choose which of it to load or clear (delete).
+                console.log('Creating Render Pass Descriptor...');
+                renderPassDescriptor = {
+                    label: 'Basic canvas render pass',
+                    colorAttachments: [
+                    {
+                        clearValue: [0.9686, 0.9529, 0.9922, 1.0], //canvas color, its white
+                        loadOp: 'clear',  //clear operand
+                        storeOp: 'store', //store operand
+                    },],
+                    depthStencilAttachment: depthStencilAttachment,
+                };
+        }}
+
+        async function startup() {
+            console.log("Loading Shader files...");
+            //Get the shader files
+            $.ajax({
+                type: "GET",
+                url: "shaders/d3_vs.wgsl",
+                async: false,
+                success: function(response) { vsShaderFile = response; }
+            });
+            $.ajax({
+                type: "GET",
+                url: "shaders/d3_fs.wgsl",
+                async: false,
+                success: function(response) { fsShaderFile = response; }
+            });
+
+            //Create the modules for the shader file and the fragment file.
+            vsModule = device.createShaderModule({
+                label: 'Simple VS ',
+                code: vsShaderFile,
+            });
+            fsModule = device.createShaderModule({
+                label: 'Simple FS ',
+                code: fsShaderFile,
+            });
+
+            console.log('Creating layout for Group...');
+            //Making the binding group layout
+            bindGroupLayout = device.createBindGroupLayout({
+                    entries: [{
+                        binding: 0,      //modelMatrix @binding(0)
+                        visibility: GPUShaderStage.VERTEX,
+                        buffer: {},
+                    }, 
+                    {
+                        binding: 1,      //projection matrix @binding(1)
+                        visibility: GPUShaderStage.VERTEX,
+                        buffer: {},
+                    }, {
+                        binding: 2,      //viewMatrix @binding(2)
+                        visibility: GPUShaderStage.VERTEX,
+                        buffer: {},
+                    },
+                    {
+                        binding: 3, //sampler @binding(3)
+                        visibility: GPUShaderStage.FRAGMENT,
+                        sampler: {}
+                    },
+                    {
+                        binding: 4, //sampler @binding(4)
+                        visibility: GPUShaderStage.FRAGMENT,
+                        texture: {sampleType: 'float', viewDimension: '2d', multisampled: false,}
+                    },
+                    {
+                        binding: 5, //light @binding(5)
+                        visibility: GPUShaderStage.FRAGMENT,
+                        buffer: {
+                            type: 'uniform',
+                        }
+                    },
+                    {
+                        binding: 6, //normals @binding(6)
+                        visibility: GPUShaderStage.VERTEX,
+                        buffer: {}
+                    },
+                    {
+                        binding: 7, //camera position @binding(7)
+                        visibility: GPUShaderStage.VERTEX,
+                        buffer: {}
+                    }
+                ]
+                });
+
+            //Making a new pipeline layout to define what binding group layout we are using.
+            console.log('Creating pipeline layout...');
+            pipelineLayout = device.createPipelineLayout({
+                bindGroupLayouts: [
+                    bindGroupLayout, //@group(0)
+                ]
+            });
+
+            //Set the canvas sizing and create the pipeline.
+            canvasWidth = canvas.width;
+            canvasHeight = canvas.height;
+            create_pipeline();
+            
+            console.log("Gathering vertex, color, index, transformation data...");
+
+            //Create the object loader
+            const loader = new Loader();
+            //Load in the object file using the load function from Loader
+            const objFile = await loader.load("meshes/guitar.obj");
+
+            let response = await fetch("textures/guitar.png");
+            let blob = await response.blob(); //Get blob from the response
+            let imageBitmap = await createImageBitmap(blob); //Create imagebitmap from the blob
+
+            //Parsed object from using the parse function from Loader
+            const parsedObject = await loader.parse(objFile);
+            //get the positions and indices of the pobject and store them
+            positions = parsedObject.positions;
+            indices = parsedObject.indices;
+
+            //These are used to ensure all values being read are divisible by 4.
+            console.log('positions byteLength:', positions.byteLength);
+            if (positions.byteLength % 4 !== 0) {
+                const paddedPositions = new Float32Array(Math.ceil(positions.length / 4) * 4);
+                paddedPositions.set(positions);
+                positions = paddedPositions;
+            }
+
+            console.log('indicies byteLength:', indices.byteLength);
+            if (indices.byteLength % 4 !== 0) {
+                const paddedIndices = new Uint32Array(Math.ceil(indices.length / 2) * 2); // Uint32Array ensures 4-byte alignment
+                paddedIndices.set(indices);
+                indices = paddedIndices;
+            }
+
+            const textureData = parsedObject.uvs;
+            if (textureData.byteLength % 4 !== 0) {
+                const paddedColors = new Float32Array(Math.ceil(textureData.length / 4) * 4);
+                paddedColors.set(textureData);
+                textureData = paddedColors;
+            }
+
+             const normalData = parsedObject.normals;
+            if (normalData.byteLength % 4 !== 0) {
+                const paddedColors = new Float32Array(Math.ceil(normalData.length / 4) * 4);
+                paddedColors.set(normalData);
+                normalData = paddedColors;
+            }
+
+                //Get the vertex count (divide by 3 for 3d).
+                const vertexCount = positions.length / 3;
+                const colorData = new Float32Array(vertexCount * 4);
+
+                //Matrix translation of the object
+                let modelMatrix = mat4.create();
+                mat4.identity(modelMatrix);
+                //Set the model's transform within the matrix.
+                modelMatrix = mat4.translate(modelMatrix, [1.0, 1.0, -0.5]);
+                //Set the model's rotation movement within the matrix.
+                modelMatrix = mat4.rotate(modelMatrix, [0.0, 1.0, 0.0], angle * (Math.PI/180.0));
+                //Use uniformdata to pass the matrix data to the buffer.
+                const uniformData0 = modelMatrix;
+                normalMatrices = (mat4.transpose(mat4.inverse(modelMatrix)));
+
+                //Set the projection.
+                canvasWidth = canvas.width;
+                canvasHeight = canvas.height;
+                projectionMatrix = mat4.perspective(60.0 * Math.PI / 180.0, canvasWidth / canvasHeight, 0.1, 1000.0);
+                const uniformData1 = projectionMatrix;
+
+                //Set the camera view.
+                let camX = Math.sin(cameraRadiusAngle) * cameraRadius; 
+                let camZ = Math.cos(cameraRadiusAngle) * cameraRadius;
+                let eye = [camX, 0.0, camZ];
+                let target = [0.0, 0.0, 0.0];
+                let up = [0.0, 0.0, 0.0];
+                viewMatrix = mat4.lookAt(cameraPosition, vec3.add(cameraPosition, cameraFront), cameraUp);
+
+                //Set up the lighting.
+                light = new Float32Array(20);
+                light.set(ia, 0);
+                light.set(id, 4);
+                light.set(is, 8);
+                light.set(shininess, 12);
+                light.set(lightPosition, 16);
+
+                //--- BUFFERS ---//
+                console.log("Creating Buffers...");
+                //need to change this buffer
+                vertexBuffer = device.createBuffer({
+                    label: 'vertex buffer object',
+                    size: positions.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                });
+                device.queue.writeBuffer(vertexBuffer, 0, positions);
+
+                colorBuffer = device.createBuffer({
+                    label: 'color attribute object',
+                    size: colorData.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                });
+                device.queue.writeBuffer(colorBuffer, 0, colorData);
+
+                //Index Buffer
+                indexBuffer = device.createBuffer({
+                    label: 'index buffer',
+                    size: indices.byteLength,
+                    usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+                });
+                device.queue.writeBuffer(indexBuffer, 0, indices);
+
+                //Uniform Buffer 0
+                uniformBuffer0 = device.createBuffer({
+                    label: 'uniform buffer',
+                    size: uniformData0.byteLength,
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+                });
+                device.queue.writeBuffer(uniformBuffer0, 0, uniformData0);
+
+                //Uniform Buffer 1
+                uniformBuffer1 = device.createBuffer({
+                    label: 'uniform buffer',
+                    size: projectionMatrix.byteLength,
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+                });
+                device.queue.writeBuffer(uniformBuffer1, 0, projectionMatrix);
+
+                //View Buffer
+                uniformBufferView = device.createBuffer({           
+                    label: 'uniform buffer',
+                    size: viewMatrix.byteLength,
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+                });
+                device.queue.writeBuffer(uniformBufferView, 0, viewMatrix);
+
+                //Texture Buffer
+                textureBuffer = device.createBuffer({
+                    label: 'texture buffer',
+                    size: textureData.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                });
+                device.queue.writeBuffer(textureBuffer, 0, textureData);
+
+                //Normal Buffer
+                normalBuffer = device.createBuffer({              
+                    label: 'normal buffer',
+                    size: normalData.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                });
+                device.queue.writeBuffer(normalBuffer, 0, normalData);
+
+                //Normal Matrices Buffer
+                uniformBufferNormalMatrix = device.createBuffer({            
+                        label: 'uniform buffer normal matrix',
+                        size: normalMatrices.byteLength,
+                        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+                });
+                device.queue.writeBuffer(uniformBufferNormalMatrix, 0, normalMatrices);
+
+                //Light Buffer                         
+                uniformBufferLight = device.createBuffer({           
+                    label: 'uniform buffer light',
+                    size: light.byteLength,
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+                });
+                device.queue.writeBuffer(uniformBufferLight, 0, light);
+
+                //Camera Buffer    
+                uniformBufferCameraPosition = device.createBuffer({           
+                    label: 'uniform buffer camera position',
+                    size: cameraPosition.byteLength,
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+                });
+                device.queue.writeBuffer(uniformBufferCameraPosition, 0, cameraPosition);
+
+                //TEXTURE
+                //Create a texture from the imported image                     
+                texture = device.createTexture({
+                    size: [imageBitmap.width, imageBitmap.height],
+                    format: 'rgba8unorm',
+                    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
+                });
+                device.queue.copyExternalImageToTexture(
+                    { source: imageBitmap },
+                    { texture: texture },
+                    [imageBitmap.width, imageBitmap.height]
+                );
+
+                //Texture Sampler                         
+                const sampler = device.createSampler({
+                    addressModeU: 'repeat',
+                    addressModeV: 'repeat',
+                    mipmapFilter: 'linear',
+                    magFilter: 'linear',
+                    minFilter: 'linear',                
+                });
+
+            //Create bind group with the resources.
+            console.log('Creating bind groups...');
+            bindGroup = device.createBindGroup({
+                layout: bindGroupLayout,
+                entries: [{
+                        binding: 0,
+                        resource: { buffer: uniformBuffer0 }                
+                    }, {
+                        binding: 1,
+                        resource: { buffer: uniformBuffer1 }
+                    }, {
+                        binding: 2,
+                        resource: { buffer: uniformBufferView }
+                    },
+                    {
+                        binding: 3,
+                        resource: sampler //get from texture sampler
+                    },
+                    {
+                        binding: 4,
+                        resource: texture.createView({dimension: '2d',})
+                    },
+                    {
+                        binding: 5,
+                        resource: { buffer: uniformBufferLight }
+                    },
+                    {
+                        binding: 6,
+                        resource: { buffer: uniformBufferNormalMatrix } 
+                    },
+                    {
+                        binding: 7,
+                        resource: { buffer: uniformBufferCameraPosition }   
+                    }
+                ]
+            });
+            console.log('Finish all loading at startup...');
+        }
+
+        function render() {
+            // Calculate FPS
+            now = Date.now();
+            const deltaTime = now - then;
+            let fps = (1000.0 / (deltaTime));
+            then = now;
+            //console.log("Rendering frame (" + Date().toLocaleString() + ") at " + fps.toFixed(2) +" FPS.");
+
+            //now add canvas stuff here
+            projectionMatrix = mat4.perspective(60.0 * Math.PI / 180.0, canvasWidth / canvasHeight, 0.1, 1000.0);
+            device.queue.writeBuffer(uniformBuffer1, 0, projectionMatrix);
+
+            //Camera movement using the key bindings.
+            cameraSpeed = 0.02 * deltaTime;
+            for (var key in keys)
+            {
+                if (key == 187) cameraPosition = vec3.add(cameraPosition, vec3.mulScalar(cameraFront, cameraSpeed)); //zoom in
+                if (key == 189) cameraPosition = vec3.subtract(cameraPosition, vec3.mulScalar(cameraFront, cameraSpeed)); //zoom out
+                if (key == 37) cameraPosition = vec3.subtract(cameraPosition, vec3.mulScalar(vec3.normalize(vec3.cross(cameraFront, cameraUp)), cameraSpeed)); //left
+                if (key == 39) cameraPosition = vec3.add(cameraPosition, vec3.mulScalar(vec3.normalize(vec3.cross(cameraFront, cameraUp)), cameraSpeed)); //right
+                if (key == 38) cameraPosition = vec3.add(cameraPosition, vec3.mulScalar(cameraUp, cameraSpeed)); //up
+                if (key == 40) cameraPosition = vec3.subtract(cameraPosition, vec3.mulScalar(cameraUp, cameraSpeed)); //down            
+            }
+
+            //The viewing matrix
+            viewMatrix = mat4.lookAt(
+                    cameraPosition, 
+                    vec3.add(cameraPosition, cameraFront),
+                    cameraUp);
+            device.queue.writeBuffer(uniformBufferView, 0, viewMatrix);
+
+            //Update the camera and light position
+            device.queue.writeBuffer(uniformBufferCameraPosition, 0, cameraPosition);
+
+            //Object rotation and translation (modelMatrix)
+            angle = angle + 1.0; //animation
+            modelMatrix = mat4.create();
+            mat4.identity(modelMatrix);
+            modelMatrix = mat4.scale(modelMatrix, [1.0, 1.0, 1.0]);
+            modelMatrix = mat4.translate(modelMatrix, [0.0, -1.0, 15.0]); //move down a bit and move slightly back
+            modelMatrix = mat4.rotate(modelMatrix, [0.0, 1.0, 0.0], angle * (Math.PI/180.0) );
+            device.queue.writeBuffer(uniformBuffer0, 0, modelMatrix);
+
+            //Get the current texture from the canvas context and set it as the texture to render.
+            renderPassDescriptor.colorAttachments[0].view = 
+            context.getCurrentTexture().createView();
+
+            //----RENDERING----//
+            //Create a command encoder to start encoding commands.
+            const encoder = device.createCommandEncoder({ label: 'the encoder' });
+
+            //Create a render pass encoder to encode render commands.
+            const pass = encoder.beginRenderPass(renderPassDescriptor);
+            canvas = document.getElementById("canvas");
+            pass.setViewport(0, 0, canvasWidth, canvasHeight, 0, 1); 
+            pass.setPipeline(pipeline);
+            device.queue.writeBuffer(uniformBufferLight, 0, light); //add the light to the buffer
+
+            //Add the normals and the positions to the buffer.
+            normalMatrices = mat4.transpose(mat4.inverse(modelMatrix));
+            device.queue.writeBuffer(uniformBufferNormalMatrix, 0, normalMatrices);
+
+            //Setting up the pass with our vertices, colour, textures, normals, indices and binding group.
+            pass.setVertexBuffer(0, vertexBuffer);
+            pass.setVertexBuffer(1, colorBuffer);
+            pass.setVertexBuffer(2, textureBuffer);
+            pass.setVertexBuffer(3, normalBuffer);
+            pass.setIndexBuffer(indexBuffer, 'uint16');
+            pass.setBindGroup(0, bindGroup);
+            pass.drawIndexed(indices.length, 1);
+            pass.end();
+
+            const commandBuffer = encoder.finish();
+            device.queue.submit([commandBuffer]);
+        }
+
+        // start code
+        await setup();
+        startup();
+            
+        //Define the FPS for our render.
+        const UPDATE_INTERVAL = 1000.0 /30.0; 
+        setInterval(render, UPDATE_INTERVAL);
+
+        // Check for resize
+        const observer = new ResizeObserver(entries => {
+        for (const entry of entries) // Iterate over all observed entries
+        {   
+            const canvas = entry.target;// Get the canvas element being resized
+            // Retrieve the new width and height from the content box size
+            const width = entry.contentBoxSize[0].inlineSize;
+            const height = entry.contentBoxSize[0].blockSize;
+            // Adjust the canvas dimensions, ensuring they stay within the device's texture limits
+            canvas.width = Math.max(1, Math.min(width, device.limits.maxTextureDimension2D));
+            canvas.height = Math.max(1, Math.min(height, device.limits.maxTextureDimension2D));
+            // Update global variables tracking canvas dimensions
+            canvasWidth = canvas.width;
+            canvasHeight = canvas.height;
+            // Recreate the rendering pipeline to adapt to the new canvas size    
+            create_pipeline();
+        }
+        });
+        // Start observing the canvas element for size changes
+        observer.observe(canvas);
+
+        // Check for key presses
+        $(document).keydown(function (e) {
+            keys[e.which] = true;
+        });
+        $(document).keyup(function (e) {
+            delete keys[e.which];
+        });
+    } 
+    main();
+</script>
+</body>
+</html>

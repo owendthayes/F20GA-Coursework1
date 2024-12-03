@@ -1,0 +1,9 @@
+Iona Moynihan
+Had to redo my own model from scratch due to non-manifold geometry present, for Kumi and Owen's models I fixed theirs by uv mapping and making sure there is a single texture file per object.
+Began this part of the project by first following the lab examples, this included: first creating a basic render pipeline and a simple shader for a vertice. The next step that followed was to create a JavaScript 'Loader' file that includes two functions; load object, parse object. Loading the object would retrieve the file, parse object carefully reads in the .obj file and splits it into: normals, indices, positions and uvs. This information is later read into the program's buffers to create the renders of the objects.
+After creating this script, I had to then begin loading in the parsed data into the position and indices buffers to get the object's geometries to render. After this step was completed, the next step was to add camera movement using key bindings and adding a matrice to place the model's translation as well as creating projection for the camera and model. Once the projection was added, the textures were then later read into the file, with the normals and their positions added soon after. These are all within buffers which are read into the rendering pipeline to produce the final result. Finally, I added lighting as per the lab example, which is used to give light and some surface reflection, shininess, etc. I produced all the HTML code for the rendering process, with Kumi helping to make the .css and Owen writing documentation and both have added extra HTML functionality such as the buttons.
+
+Kumi Gilchrist
+
+
+Owen Hayes
