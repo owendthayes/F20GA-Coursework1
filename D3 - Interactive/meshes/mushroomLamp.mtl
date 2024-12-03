@@ -1,0 +1,12 @@
+# Blender 4.2.2 LTS MTL File: 'mushroomlamp2.blend'
+# www.blender.org
+
+newmtl mushroomLampMaterial
+Ns 455.089417
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 0.800000
+illum 9
+map_Kd C:/Users/ionam/Desktop/F20GA/D3 - Interactive/textures/mushroomLamp.png
