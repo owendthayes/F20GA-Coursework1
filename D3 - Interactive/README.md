@@ -1,6 +1,6 @@
 # Deliverable 3 - Interactive Visualiser
 ## Group 1 - Iona Moynihan, Kumi Gilchrist, Owen Hayes
-### LINK TO VIDEO EXPLAINATION: 
+### LINK TO VIDEO EXPLAINATION: https://youtu.be/0BW-cbRu6lI
 
 #### Iona Moynihan
 Had to redo my own model from scratch due to non-manifold geometry present, for Kumi and Owen's models I fixed theirs by uv mapping and making sure there is a single texture file per object.
@@ -11,7 +11,7 @@ After creating this script, I had to then begin loading in the parsed data into 
 I began working on the front end for the HTML of this project by designing the user interface, and coding the functionality required. The user interface has components such as buttons for navigating between the models, aswell as names and descriptions for each model to provide clarification. The interface also provides instructions for the user to toggle their camera view. The initial design intention was to have a single HTML file where the Canvas would dynamically update with new model files upon clicking the left or right buttons. I was able to get the name and item descriptions to dynamically update on button click, however complexities in the pipeline setup made switching between different model files too difficult to resolve in a single webpage. Having raised this issue with the rest of the team, we colloborated to find a suitable solution that meets the requirements specified in the project brief. Ultimately we determined that having seperate HTML pages for each item was the simplest and most straight-forward solution. I also assisted in debugging the final stage of the rendering process of the webpages with Iona + Owen.
 
 #### Owen Hayes
-Created the documentation for this project including the powerpoint and the video explaination. The HTML was later cleaned up by myself to make the code much more readable, and I helped in the final debugging stages of the rendering process with Iona + Kumi.
+Created the documentation for this project including the powerpoint and the video explaination. I helped later with the HTML code during a final clean-up stage as well as helping with debugging final stages of the rendering process with Iona and Kumi, aiding in coming up with ideas to fix our issue, as well as trying out different code that could have potentially fixed the problem. The explanation video documents the development process, images of different parts of application during development, as well as code snippets and explanations of different aspects of the code supplimented with some insight into the problems encountered during the project.
 
 ### How the models are loaded
 The models are loaded in using a Loader.js script which contains two functions: load, parse. The Load function is used to grab the object's file from a filepath, with the parse function splitting the .obj file into 4 variables (by parsing each line and deciding by the first characters of each line what data type it is) which are: normals, uvs, positions, indices.
